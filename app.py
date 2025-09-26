@@ -21,18 +21,18 @@ def main():
     # Header com estilo
     st.markdown("""
     <div style='text-align: center; padding: 20px; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); border-radius: 10px; margin-bottom: 30px;'>
-        <h1 style='color: white; margin: 0;'>🎵 Text to Voice Converter</h1>
+        <h1 style='color: white; margin: 0;'>Text To Voice</h1>
         <p style='color: white; margin: 5px 0 0 0; opacity: 0.9;'>Converta textos em áudio de alta qualidade</p>
     </div>
     """, unsafe_allow_html=True)
 
     # Sidebar com configurações avançadas
     with st.sidebar:
-        st.header("⚙️ Configurações")
+        st.header("Configurações")
 
         # Seleção de idioma
         selected_lang = st.selectbox(
-            "🌍 Idioma:",
+            "Idioma:",
             options=list(LANGUAGES.keys()),
             format_func=lambda x: LANGUAGES[x],
             index=0
@@ -55,7 +55,7 @@ def main():
 
         # Opções avançadas
         st.markdown("---")
-        st.markdown("### 🔧 Opções Avançadas")
+        st.markdown("### Opções Avançadas")
 
         # Qualidade (visual apenas, gTTS não suporta)
         quality_option = st.selectbox(

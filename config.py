@@ -21,6 +21,14 @@ LANGUAGES = {
     'zh': '中文'
 }
 
+# Opções de velocidade
+SPEED_OPTIONS = {
+    'muito_lenta': {'label': '🐌 Muito Lenta', 'slow': True, 'description': 'Ideal para aprendizado'},
+    'lenta': {'label': '🚶 Lenta', 'slow': True, 'description': 'Boa para compreensão'},
+    'normal': {'label': '🚀 Normal', 'slow': False, 'description': 'Velocidade padrão'},
+    'rapida': {'label': '⚡ Rápida', 'slow': False, 'description': 'Para revisão rápida'}
+}
+
 # Configurações da interface
 UI_CONFIG = {
     'page_title': 'Text to Voice Converter',
@@ -33,4 +41,11 @@ UI_CONFIG = {
 LIMITS = {
     'max_chars': 5000,  # Limite do gTTS
     'chunk_size': 500   # Tamanho do chunk para textos longos
+}
+
+# Configurações de qualidade
+QUALITY_OPTIONS = {
+    'baixa': {'label': '📱 Baixa', 'description': 'Arquivo menor'},
+    'media': {'label': '💻 Média', 'description': 'Equilibrio'},
+    'alta': {'label': '🎧 Alta', 'description': 'Melhor qualidade'}
 }

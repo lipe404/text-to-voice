@@ -2,10 +2,14 @@ import streamlit as st
 import io
 import time
 from datetime import datetime
-from config import LANGUAGES, UI_CONFIG, LIMITS, SPEED_OPTIONS, QUALITY_OPTIONS
+from config import (
+    LANGUAGES, UI_CONFIG, LIMITS, SPEED_OPTIONS, QUALITY_OPTIONS,
+    VOICE_OPTIONS, VOICE_FILTERS, PITCH_OPTIONS
+)
 from utils.audio_utils import (
     text_to_speech, split_text, get_download_link,
-    get_multiple_download_links, get_audio_info, estimate_duration
+    get_multiple_download_links, get_audio_info, estimate_duration,
+    get_voice_preview_text
 )
 
 # Configuração da página
@@ -22,7 +26,7 @@ def main():
     st.markdown("""
     <div style='text-align: center; padding: 20px; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); border-radius: 10px; margin-bottom: 30px;'>
         <h1 style='color: white; margin: 0;'>Text To Voice</h1>
-        <p style='color: white; margin: 5px 0 0 0; opacity: 0.9;'>Converta textos em áudio de alta qualidade</p>
+        <p style='color: white; margin: 5px 0 0 0; opacity: 0.9;'>Converta textos em áudio com vozes e filtros personalizados</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -38,7 +42,51 @@ def main():
             index=0
         )
 
-        # Controle de velocidade avançado
+        # Configurações de voz (apenas para idiomas suportados)
+        st.markdown("---")
+        st.markdown("### Configurações de Voz")
+
+        # Tipo de voz
+        if selected_lang in VOICE_OPTIONS:
+            voice_options = list(VOICE_OPTIONS[selected_lang].keys())
+            voice_type = st.selectbox(
+                "Tipo de voz:",
+                options=voice_options,
+                format_func=lambda x: VOICE_OPTIONS[selected_lang][x]['label'],
+                index=0,
+                help="Escolha o tipo de voz desejado"
+            )
+
+            # Mostrar descrição da voz
+            voice_desc = VOICE_OPTIONS[selected_lang][voice_type]['description']
+            st.caption(f"ℹ️ {voice_desc}")
+        else:
+            voice_type = 'feminina'  # Padrão
+            st.info("Opções de voz disponíveis apenas para Português")
+
+        # Filtros de voz
+        voice_filter = st.selectbox(
+            "Filtro de voz:",
+            options=list(VOICE_FILTERS.keys()),
+            format_func=lambda x: VOICE_FILTERS[x]['label'],
+            index=0,
+            help="Aplique efeitos especiais à voz"
+        )
+
+        # Mostrar descrição do filtro
+        filter_desc = VOICE_FILTERS[voice_filter]['description']
+        st.caption(f"ℹ️ {filter_desc}")
+
+        # Tom/Pitch
+        pitch_option = st.selectbox(
+            "Tom da voz:",
+            options=list(PITCH_OPTIONS.keys()),
+            format_func=lambda x: PITCH_OPTIONS[x]['label'],
+            index=2,  # Normal
+            help="Ajuste o tom da voz"
+        )
+
+        # Controle de velocidade
         st.markdown("---")
         st.markdown("### Controle de Velocidade")
 
@@ -47,22 +95,43 @@ def main():
             options=list(SPEED_OPTIONS.keys()),
             format_func=lambda x: SPEED_OPTIONS[x]['label'],
             index=2,  # Normal por padrão
-            help="Escolha a velocidade ideal para sua necessidade"
+            help="Escolha a velocidade ideal"
         )
 
-        # Mostrar descrição da velocidade selecionada
         st.caption(f"ℹ️ {SPEED_OPTIONS[speed_option]['description']}")
+
+        # Preview da voz
+        st.markdown("---")
+        st.markdown("### Teste de Voz")
+
+        if st.button("Testar Voz", use_container_width=True):
+            preview_text = get_voice_preview_text(voice_type, voice_filter)
+
+            with st.spinner("Gerando preview..."):
+                preview_audio = text_to_speech(
+                    preview_text,
+                    selected_lang,
+                    SPEED_OPTIONS[speed_option]['slow'],
+                    speed_option,
+                    voice_type,
+                    voice_filter,
+                    pitch_option
+                )
+
+                if preview_audio:
+                    st.audio(preview_audio, format='audio/mp3')
+                    st.success("Preview gerado!")
 
         # Opções avançadas
         st.markdown("---")
         st.markdown("### Opções Avançadas")
 
-        # Qualidade (visual apenas, gTTS não suporta)
+        # Qualidade
         quality_option = st.selectbox(
             "Qualidade do áudio:",
             options=list(QUALITY_OPTIONS.keys()),
             format_func=lambda x: QUALITY_OPTIONS[x]['label'],
-            index=1,  # Média por padrão
+            index=1,
             help="Configuração visual - gTTS usa qualidade padrão"
         )
 
@@ -86,7 +155,7 @@ def main():
             st.session_state.total_chars = 0
 
         st.markdown("---")
-        st.markdown("### Estatísticas da Sessão")
+        st.markdown("### Estatísticas")
         col1, col2 = st.columns(2)
         with col1:
             st.metric("Conversões", st.session_state.conversions_count)
@@ -102,7 +171,7 @@ def main():
         text_input = st.text_area(
             "",
             height=350,
-            placeholder="Digite ou cole seu texto aqui...\n\n Dicas:\n• Não há limite de caracteres\n• Use pontuação para melhor resultado\n• Textos longos serão divididos automaticamente\n• Experimente diferentes velocidades!",
+            placeholder="Digite ou cole seu texto aqui...\n\n✨ Dicas:\n• Experimente diferentes vozes e filtros\n• Use pontuação para melhor resultado\n• Teste a voz antes de gerar o áudio completo\n• Textos longos serão divididos automaticamente",
             help="O sistema divide automaticamente textos longos para melhor processamento"
         )
 
@@ -118,36 +187,46 @@ def main():
             with col_info2:
                 st.metric("Palavras", f"{word_count:,}")
             with col_info3:
-                st.metric("Duração estimada", estimated_duration)
+                st.metric("⏱Duração estimada", estimated_duration)
 
             if char_count > LIMITS['chunk_size']:
                 chunks_needed = len(split_text(
                     text_input, LIMITS['chunk_size']))
                 st.info(
-                    f"Texto longo detectado! Será dividido em **{chunks_needed} partes**.")
+                    f"ℹ️ Texto longo detectado! Será dividido em **{chunks_needed} partes**.")
 
     with col2:
         # Painel de controle
         st.markdown("### Painel de Controle")
 
-        # Preview da configuração
+        # Preview da configuração atual
         with st.container():
             st.markdown("**Configuração Atual:**")
+
+            # Obter labels das configurações
+            voice_label = VOICE_OPTIONS.get(selected_lang, {}).get(
+                voice_type, {}).get('label', 'Padrão')
+            filter_label = VOICE_FILTERS[voice_filter]['label']
+            speed_label = SPEED_OPTIONS[speed_option]['label']
+            pitch_label = PITCH_OPTIONS[pitch_option]['label']
+
             config_info = f"""
             - **Idioma:** {LANGUAGES[selected_lang]}
-            - **Velocidade:** {SPEED_OPTIONS[speed_option]['label']}
-            - **Qualidade:** {QUALITY_OPTIONS[quality_option]['label']}
+            - **Voz:** {voice_label}
+            - **Filtro:** {filter_label}
+            - **Tom:** {pitch_label}
+            - **Velocidade:** {speed_label}
             - **Modo:** {merge_option}
             """
             st.markdown(config_info)
 
         # Botão de gerar com estilo
         generate_button = st.button(
-            "🎵 Gerar Áudio",
+            "Gerar Áudio Completo",
             type="primary",
             disabled=not text_input.strip(),
             use_container_width=True,
-            help="Clique para converter o texto em áudio"
+            help="Clique para converter todo o texto em áudio"
         )
 
         # Preview do texto
@@ -160,19 +239,22 @@ def main():
 
     # Processamento
     if generate_button and text_input.strip():
-        process_text_to_speech(text_input, selected_lang,
-                               speed_option, merge_option)
+        process_text_to_speech(
+            text_input, selected_lang, speed_option, merge_option,
+            voice_type, voice_filter, pitch_option
+        )
 
 
-def process_text_to_speech(text, language, speed_option, merge_option):
-    """Processa a conversão de texto para áudio com velocidade personalizada"""
+def process_text_to_speech(text, language, speed_option, merge_option,
+                           voice_type, voice_filter, pitch_option):
+    """Processa a conversão de texto para áudio com configurações avançadas de voz"""
 
-    with st.spinner("Gerando áudio..."):
+    with st.spinner("Gerando áudio com configurações personalizadas..."):
         progress_bar = st.progress(0)
         status_text = st.empty()
 
         try:
-            # Determinar se usar slow do gTTS
+            # Determinar configurações
             use_slow = SPEED_OPTIONS[speed_option]['slow']
 
             # Verificar se precisa dividir o texto
@@ -182,11 +264,15 @@ def process_text_to_speech(text, language, speed_option, merge_option):
                 progress_bar.progress(50)
 
                 audio_data = text_to_speech(
-                    text, language, use_slow, speed_option)
+                    text, language, use_slow, speed_option,
+                    voice_type, voice_filter, pitch_option
+                )
                 progress_bar.progress(100)
 
                 if audio_data:
-                    display_single_audio_result(audio_data, text, speed_option)
+                    display_single_audio_result(
+                        audio_data, text, speed_option, voice_type, voice_filter
+                    )
                     st.session_state.conversions_count += 1
                     st.session_state.total_chars += len(text)
 
@@ -209,11 +295,13 @@ def process_text_to_speech(text, language, speed_option, merge_option):
                     progress_bar.progress(progress)
 
                     chunk_audio = text_to_speech(
-                        chunk, language, use_slow, speed_option)
+                        chunk, language, use_slow, speed_option,
+                        voice_type, voice_filter, pitch_option
+                    )
                     if chunk_audio:
                         audio_chunks.append(chunk_audio)
                     else:
-                        st.error(f"Erro ao processar parte {i+1}")
+                        st.error(f"❌ Erro ao processar parte {i+1}")
                         return
 
                     # Pausa para evitar rate limiting
@@ -225,10 +313,12 @@ def process_text_to_speech(text, language, speed_option, merge_option):
                 if audio_chunks:
                     if merge_option == "Arquivo único":
                         display_merged_audio_result(
-                            audio_chunks, text, total_chunks, speed_option)
+                            audio_chunks, text, total_chunks, speed_option, voice_type, voice_filter
+                        )
                     else:
                         display_multiple_audio_result(
-                            audio_chunks, text, total_chunks, speed_option)
+                            audio_chunks, text, total_chunks, speed_option, voice_type, voice_filter
+                        )
                     st.session_state.conversions_count += 1
                     st.session_state.total_chars += len(text)
 
@@ -240,7 +330,7 @@ def process_text_to_speech(text, language, speed_option, merge_option):
             status_text.empty()
 
 
-def display_single_audio_result(audio_data, original_text, speed_option):
+def display_single_audio_result(audio_data, original_text, speed_option, voice_type, voice_filter):
     """Exibe resultado de áudio único com informações detalhadas"""
 
     st.success("Áudio gerado com sucesso!")
@@ -259,6 +349,15 @@ def display_single_audio_result(audio_data, original_text, speed_option):
     with col4:
         st.metric("⏱Duração", estimated_duration)
 
+    # Informações da voz
+    st.markdown("### Configurações Aplicadas")
+    voice_info = f"""
+    - **Tipo de voz:** {voice_type.title()}
+    - **Filtro:** {voice_filter.title()}
+    - **Velocidade:** {speed_option.replace('_', ' ').title()}
+    """
+    st.markdown(voice_info)
+
     # Player de áudio
     st.markdown("### Player de Áudio")
     st.audio(audio_data, format='audio/mp3')
@@ -266,20 +365,19 @@ def display_single_audio_result(audio_data, original_text, speed_option):
     # Download
     st.markdown("### Download")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    speed_suffix = speed_option if speed_option != 'normal' else ''
-    filename = f"audio_{speed_suffix}_{timestamp}.mp3"
+    filename = f"audio_{voice_type}_{voice_filter}_{speed_option}_{timestamp}.mp3"
 
     download_link = get_download_link(audio_data, filename)
     st.markdown(download_link, unsafe_allow_html=True)
 
 
-def display_multiple_audio_result(audio_chunks, original_text, chunks_count, speed_option):
+def display_multiple_audio_result(audio_chunks, original_text, chunks_count,
+                                  speed_option, voice_type, voice_filter):
     """Exibe resultado de múltiplos áudios"""
 
     st.success("Áudios gerados com sucesso!")
 
     # Informações detalhadas
-    total_size = sum(len(chunk) for chunk in audio_chunks)
     audio_info = get_audio_info(b''.join(audio_chunks))
     estimated_duration = estimate_duration(original_text, speed_option)
 
@@ -291,12 +389,20 @@ def display_multiple_audio_result(audio_chunks, original_text, chunks_count, spe
     with col3:
         st.metric("Tamanho Total", audio_info['size'])
     with col4:
-        st.metric("Duração", estimated_duration)
+        st.metric("⏱Duração", estimated_duration)
+
+    # Informações da voz
+    st.markdown("### Configurações Aplicadas")
+    voice_info = f"""
+    - **Tipo de voz:** {voice_type.title()}
+    - **Filtro:** {voice_filter.title()}
+    - **Velocidade:** {speed_option.replace('_', ' ').title()}
+    """
+    st.markdown(voice_info)
 
     # Players de áudio organizados
     st.markdown("### Players de Áudio")
 
-    # Mostrar apenas os primeiros 3 por padrão
     show_all = st.checkbox("Mostrar todos os players", value=False)
     display_count = len(audio_chunks) if show_all else min(
         3, len(audio_chunks))
@@ -313,19 +419,17 @@ def display_multiple_audio_result(audio_chunks, original_text, chunks_count, spe
 
     # Downloads
     st.markdown("### Downloads")
-    st.markdown("**Baixar arquivos individuais:**")
     download_links = get_multiple_download_links(audio_chunks)
     st.markdown(download_links, unsafe_allow_html=True)
 
 
-def display_merged_audio_result(audio_chunks, original_text, chunks_count, speed_option):
+def display_merged_audio_result(audio_chunks, original_text, chunks_count,
+                                speed_option, voice_type, voice_filter):
     """Exibe resultado de áudio mesclado"""
 
     st.warning("Modo experimental: Concatenação simples de áudios")
 
-    # Concatenar áudios
     merged_audio = b''.join(audio_chunks)
-
     st.success("Áudios concatenados!")
 
     # Informações
@@ -340,7 +444,16 @@ def display_merged_audio_result(audio_chunks, original_text, chunks_count, speed
     with col3:
         st.metric("Tamanho", audio_info['size'])
     with col4:
-        st.metric("Duração", estimated_duration)
+        st.metric("⏱Duração", estimated_duration)
+
+    # Informações da voz
+    st.markdown("### Configurações Aplicadas")
+    voice_info = f"""
+    - **Tipo de voz:** {voice_type.title()}
+    - **Filtro:** {voice_filter.title()}
+    - **Velocidade:** {speed_option.replace('_', ' ').title()}
+    """
+    st.markdown(voice_info)
 
     # Player
     st.markdown("### Player de Áudio Completo")
@@ -349,8 +462,7 @@ def display_merged_audio_result(audio_chunks, original_text, chunks_count, speed
     # Download
     st.markdown("### Download")
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    speed_suffix = speed_option if speed_option != 'normal' else ''
-    filename = f"audio_completo_{speed_suffix}_{timestamp}.mp3"
+    filename = f"audio_completo_{voice_type}_{voice_filter}_{speed_option}_{timestamp}.mp3"
 
     download_link = get_download_link(merged_audio, filename)
     st.markdown(download_link, unsafe_allow_html=True)
@@ -360,9 +472,9 @@ def show_footer():
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666; padding: 30px; background: #f8f9fa; border-radius: 10px; margin-top: 40px;'>
-        <h4 style='margin: 0 0 10px 0; color: #333;'>Text to Voice Converter</h4>
+        <h4 style='margin: 0 0 10px 0; color: #333;'>🎵 Text to Voice Converter</h4>
         <p style='margin: 0; font-size: 14px;'>Desenvolvido com ❤️ usando Streamlit e Google Text-to-Speech</p>
-        <p style='margin: 5px 0 0 0; font-size: 12px; opacity: 0.7;'>Converta textos em áudio de alta qualidade com controle total de velocidade</p>
+        <p style='margin: 5px 0 0 0; font-size: 12px; opacity: 0.7;'>Converta textos em áudio com vozes e filtros personalizados</p>
     </div>
     """, unsafe_allow_html=True)
 
